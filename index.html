@@ -377,6 +377,8 @@
         }
 
         data = JSON.parse(text);
+        console.log("Backend version:", data?.pmrDetailed?.hourly?.backendVersion || "SIN_VERSION");
+        console.log("Debug LA8109:", data?.pmrDetailed?.hourly?.debugLA8109 || null);
 
         renderPmrHourly();
         document.getElementById('last-update').innerText = `ÚLTIMA ACTUALIZACIÓN: ${new Date().toLocaleTimeString('es-CL')}`;
@@ -465,7 +467,7 @@
         detDiv.innerHTML =
           `<span style="font-size:16px;font-weight:800">${escapeHtml(f.vuelo || '--')}</span>` +
           ` <span style="opacity:0.8; font-size:12px;">(${pax} PAX)</span>` +
-          ` &bull; <span style="opacity:0.9; font-size:12px;">Prog: ${escapeHtml(f.hora || '--:--')} | Servicio: ${startTime} - ${endTime}</span>` +
+          ` &bull; <span style="opacity:0.9; font-size:12px;">Prog: ${escapeHtml(f.horaProgramada || f.hora || '--:--')} | Servicio: ${startTime} - ${endTime}</span>` +
           ` &bull; <span>${estado}</span>` +
           aerolineaStr + terminalStr + tipoStr;
 
