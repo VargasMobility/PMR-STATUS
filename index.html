@@ -4,7 +4,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TV Wallboard - PMR por Hora</title>
+  <title>Operaciones PMR</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -12,7 +14,9 @@
       --glass-bg: rgba(255, 255, 255, 0.95);
       --glass-border: rgba(0, 51, 102, 0.1);
       --accent-primary: #003366;
+      /* Navy Blue */
       --accent-secondary: #cc0000;
+      /* Institutional Red */
       --text-main: #003366;
       --text-dim: #666666;
       --status-ok: #28a745;
@@ -20,7 +24,8 @@
       --status-crit: #d32f2f;
     }
 
-    body, html {
+    body,
+    html {
       margin: 0;
       padding: 0;
       width: 100vw;
@@ -41,6 +46,7 @@
       gap: 20px;
     }
 
+    /* Top Bar */
     header {
       display: flex;
       justify-content: space-between;
@@ -108,6 +114,7 @@
       letter-spacing: 2px;
     }
 
+    /* Main Display */
     main {
       position: relative;
       width: 100%;
@@ -124,18 +131,10 @@
       grid-template-columns: repeat(12, 1fr);
       grid-template-rows: repeat(12, 1fr);
       gap: 20px;
-      opacity: 0;
-      transform: scale(0.95);
-      transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-      pointer-events: none;
-    }
-
-    .screen.active {
       opacity: 1;
-      transform: scale(1);
-      pointer-events: auto;
     }
 
+    /* Cards */
     .card {
       background: #ffffff;
       border: 1px solid rgba(0, 51, 102, 0.1);
@@ -172,6 +171,7 @@
       grid-area: 1 / 1 / 13 / 13;
     }
 
+    /* Airport Traffic: Background Airplanes */
     .bg-airplane {
       position: fixed;
       width: 120px;
@@ -187,6 +187,7 @@
       to { left: 110%; }
     }
 
+    /* Footer */
     footer {
       display: flex;
       justify-content: space-between;
@@ -254,36 +255,34 @@
       from { opacity: 0.5; transform: scale(0.8); }
       to { opacity: 1; transform: scale(1.2); }
     }
-
-    .fade-in {
-      animation: fadeIn 0.5s ease-out forwards;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
   </style>
 </head>
 
 <body>
   <div class="container">
+    <!-- Background Airplanes -->
     <svg class="bg-airplane" style="top: 15%; animation-delay: 0s;" viewBox="0 0 512 512">
-      <path d="M448 336v-40L288 192V72c0-22.1-17.9-40-40-40s-40 17.9-40 40v120L48 296v40l160-48v112l-48 36v28l88-24 88 24v-28l-48-36V288l160 48z" transform="rotate(90 256 256)" />
+      <path
+        d="M448 336v-40L288 192V72c0-22.1-17.9-40-40-40s-40 17.9-40 40v120L48 296v40l160-48v112l-48 36v28l88-24 88 24v-28l-48-36V288l160 48z"
+        transform="rotate(90 256 256)" />
     </svg>
     <svg class="bg-airplane" style="top: 40%; animation-delay: -15s;" viewBox="0 0 512 512">
-      <path d="M448 336v-40L288 192V72c0-22.1-17.9-40-40-40s-40 17.9-40 40v120L48 296v40l160-48v112l-48 36v28l88-24 88 24v-28l-48-36V288l160 48z" transform="rotate(90 256 256)" />
+      <path
+        d="M448 336v-40L288 192V72c0-22.1-17.9-40-40-40s-40 17.9-40 40v120L48 296v40l160-48v112l-48 36v28l88-24 88 24v-28l-48-36V288l160 48z"
+        transform="rotate(90 256 256)" />
     </svg>
     <svg class="bg-airplane" style="top: 70%; animation-delay: -30s;" viewBox="0 0 512 512">
-      <path d="M448 336v-40L288 192V72c0-22.1-17.9-40-40-40s-40 17.9-40 40v120L48 296v40l160-48v112l-48 36v28l88-24 88 24v-28l-48-36V288l160 48z" transform="rotate(90 256 256)" />
+      <path
+        d="M448 336v-40L288 192V72c0-22.1-17.9-40-40-40s-40 17.9-40 40v120L48 296v40l160-48v112l-48 36v28l88-24 88 24v-28l-48-36V288l160 48z"
+        transform="rotate(90 256 256)" />
     </svg>
 
     <header>
       <div class="brand">
         <img src="https://drive.google.com/thumbnail?id=1UMWAaUV3KLd51IFPEqloKNQrfhM18GaD&sz=w1000" alt="Logo" class="header-logo">
         <div class="title-container">
-          <h1>PORTAL CM DASHBOARD</h1>
-          <h2 id="screen-subtitle">PASAJEROS PMR ESPERADOS AHORA</h2>
+          <h1>OPERACIONES PMR</h1>
+          <h2 id="screen-subtitle">ESTADO EN TIEMPO REAL</h2>
         </div>
       </div>
       <div class="clock-container">
@@ -293,11 +292,11 @@
     </header>
 
     <main id="display">
-      <div id="screen-pmr-hourly" class="screen active">
-        <div class="card grid-full" style="top: 80px; height: calc(100% - 100px); display: flex; flex-direction: column;">
+      <div id="screen-pmr-hourly" class="screen">
+        <div class="card grid-full" style="height: 100%; display: flex; flex-direction: column;">
           <div class="card-header" style="justify-content: space-between; align-items: center; border-bottom: 2px solid var(--glass-border); padding-bottom: 15px;">
             <div>
-              <span class="card-title" style="font-size: 18px;">PASAJEROS PMR ESPERADOS AHORA</span>
+              <span class="card-title" style="font-size: 18px;">PASAJEROS PMR PRÓXIMAS 2 HORAS</span>
               <div style="font-size: 14px; color: var(--text-dim); margin-top: 5px;" id="pmr-hourly-datetime">Fecha: -- | Total Vuelos: --</div>
             </div>
             <div id="pmr-hourly-alert-badge" style="display: none; background: var(--status-crit); color: white; padding: 5px 15px; border-radius: 20px; font-weight: bold; font-size: 14px; animation: pulse 2s infinite;">
@@ -306,7 +305,7 @@
           </div>
           <div id="pmr-hourly-container" style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; gap: 30px; transition: background 0.5s ease; border-radius: 20px; padding: 20px;">
             <div style="font-size: 24px; font-weight: 800; color: var(--text-dim); text-transform: uppercase; letter-spacing: 2px;">
-              Rango Horario Actual
+              Ventana móvil de 2 horas
             </div>
             <div id="pmr-hourly-time" style="font-size: 64px; font-weight: 800; color: var(--accent-primary); line-height: 1;">
               --:--
@@ -314,10 +313,10 @@
             <div style="display: flex; gap: 50px; justify-content: center; align-items: baseline;">
               <div style="text-align: center;">
                 <div id="pmr-hourly-pax" style="font-size: 80px; font-weight: 800; color: var(--status-ok); line-height: 1;">0</div>
-                <div style="font-size: 16px; font-weight: bold; color: var(--text-dim); text-transform: uppercase;">Pasajeros Esperados</div>
+                <div style="font-size: 16px; font-weight: bold; color: var(--text-dim); text-transform: uppercase;">Pasajeros próximos 2 horas</div>
               </div>
             </div>
-            <div id="pmr-hourly-details" style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; max-height: 200px; overflow-y: auto; width: 80%;">
+            <div id="pmr-hourly-details" style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; max-height: 350px; overflow-y: auto; width: 90%;">
               <!-- JS Dynamic -->
             </div>
           </div>
@@ -328,7 +327,8 @@
     <footer>
       <div class="airplane-container">
         <svg class="airplane-svg" viewBox="0 0 512 512">
-          <path d="M448 336v-40L288 192V72c0-22.1-17.9-40-40-40s-40 17.9-40 40v120L48 296v40l160-48v112l-48 36v28l88-24 88 24v-28l-48-36V288l160 48z" />
+          <path
+            d="M448 336v-40L288 192V72c0-22.1-17.9-40-40-40s-40 17.9-40 40v120L48 296v40l160-48v112l-48 36v28l88-24 88 24v-28l-48-36V288l160 48z" />
         </svg>
       </div>
       <div class="status-badge" style="z-index: 2;">
@@ -346,7 +346,6 @@
   <script>
     const WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxZpDddlwGfD3fngvHf-0GQsWnPgGwBh6NoBeqW8sCdITJ2ir62SvRuq34eda_QZlna/exec";
     const REFRESH_TIME = 60000;
-
     let data = null;
 
     function updateClock() {
@@ -354,68 +353,77 @@
       document.getElementById('clock').innerText = now.toLocaleTimeString('es-CL');
       const options = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
       document.getElementById('date').innerText = now.toLocaleDateString('es-CL', options);
-      
-      // Also trigger a re-render of PMR if data is ready, to keep current interval updated
-      if (data && data.pmrDetailed && data.pmrDetailed.hourly) {
-          renderPmrHourly();
-      }
     }
-    
-    // We update the clock every second, and at that time, renderPmrHourly is also called inside updateClock, 
-    // so it naturally updates if the current hour/minute crosses the :00 / :30 boundary.
     setInterval(updateClock, 1000);
     updateClock();
 
     async function fetchData() {
       try {
         if (WEBAPP_URL.includes("v_v_v")) {
-          data = getMockData();
-        } else {
-          const response = await fetch(WEBAPP_URL + "?action=data");
-          if (!response.ok) throw new Error(`HTTP Error: ${response.status} ${response.statusText}`);
-          const text = await response.text();
-          if (text.trim().startsWith("<")) throw new Error("Server returned HTML");
-          data = JSON.parse(text);
+          // Fallback en caso de necesitar un mockup durante pruebas de desarrollo locales
+          return;
         }
 
-        renderData();
+        console.log("Fetching PMR operations data...");
+        const response = await fetch(WEBAPP_URL + "?action=data");
+
+        if (!response.ok) {
+          throw new Error(`HTTP Error: ${response.status} ${response.statusText}`);
+        }
+
+        const text = await response.text();
+        if (text.trim().startsWith("<")) {
+          throw new Error("Server returned HTML (Script Error?)");
+        }
+
+        data = JSON.parse(text);
+
+        renderPmrHourly();
         document.getElementById('last-update').innerText = `ÚLTIMA ACTUALIZACIÓN: ${new Date().toLocaleTimeString('es-CL')}`;
         document.querySelector('.dot').style.background = 'var(--status-ok)';
         document.getElementById('status-text').innerText = 'SISTEMA EN LÍNEA';
       } catch (err) {
         console.error("Fetch/Render Error:", err);
         document.querySelector('.dot').style.background = 'var(--status-crit)';
-        document.getElementById('status-text').innerText = 'ERROR: ' + (err.message || err.toString());
-      }
-    }
-
-    function renderData() {
-      if (!data) return;
-      if (data.pmrDetailed && data.pmrDetailed.hourly) {
-        renderPmrHourly();
+        const errorMsg = err.message || err.toString();
+        document.getElementById('status-text').innerText = 'ERROR: ' + errorMsg;
       }
     }
 
     function renderPmrHourly() {
+      if (!data || !data.pmrDetailed || !data.pmrDetailed.hourly) return;
+
       const hourly = data.pmrDetailed.hourly;
-      if (!hourly) return;
-      
-      document.getElementById('pmr-hourly-datetime').innerText = `Fecha: ${hourly.date || '--'} | Total Vuelos: ${hourly.totalFlights || '--'}`;
+      document.getElementById('pmr-hourly-datetime').innerText =
+        `Fecha: ${hourly.date || '--'} | Total Vuelos: ${hourly.totalFlights || '--'}`;
 
       const now = new Date();
       const currentHours = now.getHours();
-      const currentMinutes = now.getMinutes() >= 30 ? 30 : 0;
-      const endMinutes = currentMinutes === 30 ? 59 : 29;
-      
-      const timeString = `${currentHours.toString().padStart(2, '0')}:${currentMinutes.toString().padStart(2, '0')}`;
-      const endString = `${currentHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`;
-      const rangeString = `${timeString} - ${endString}`;
+      const realMinutes = now.getMinutes();
 
-      let currentSlot = hourly.slots.find(s => s.time === timeString);
-      
-      if (!currentSlot && hourly.slots.length > 0) {
-        currentSlot = hourly.slots[0];
+      // La matriz del backend viene en bloques de 10 minutos.
+      // Por eso "desde ahora" se redondea al bloque de 10 minutos vigente.
+      // Ejemplo: 12:47 se evalúa como 12:40 - 14:39.
+      const current10MinIndex = (currentHours * 6) + Math.floor(realMinutes / 10);
+      const windowStartIndex = current10MinIndex;
+      const windowEndExclusive = Math.min(windowStartIndex + 12, 144); // 12 bloques de 10 min = 2 horas
+
+      function slotIndexToStartTime(index) {
+        const capped = Math.max(0, Math.min(index, 143));
+        const h = Math.floor(capped / 6).toString().padStart(2, '0');
+        const m = ((capped % 6) * 10).toString().padStart(2, '0');
+        return `${h}:${m}`;
       }
+
+      function slotIndexToEndTime(index) {
+        if (index >= 143) return '23:59';
+        const totalMinutes = (Math.max(0, index) * 10) + 9;
+        const h = Math.floor(totalMinutes / 60).toString().padStart(2, '0');
+        const m = (totalMinutes % 60).toString().padStart(2, '0');
+        return `${h}:${m}`;
+      }
+
+      const rangeString = `${slotIndexToStartTime(windowStartIndex)} - ${slotIndexToEndTime(windowEndExclusive - 1)}`;
 
       const container = document.getElementById('pmr-hourly-container');
       const timeEl = document.getElementById('pmr-hourly-time');
@@ -423,88 +431,163 @@
       const alertBadge = document.getElementById('pmr-hourly-alert-badge');
       const detailsContainer = document.getElementById('pmr-hourly-details');
 
-      if (currentSlot) {
-        timeEl.innerText = rangeString;
-        paxEl.innerText = currentSlot.pax;
-        
-        detailsContainer.innerHTML = '';
-        currentSlot.details.forEach(det => {
-          const detDiv = document.createElement('div');
-          detDiv.style.background = 'rgba(0, 51, 102, 0.1)';
-          detDiv.style.padding = '5px 15px';
-          detDiv.style.borderRadius = '15px';
-          detDiv.style.fontSize = '14px';
-          detDiv.style.fontWeight = 'bold';
-          detDiv.style.color = 'var(--accent-primary)';
-          detDiv.innerText = det;
-          detailsContainer.appendChild(detDiv);
-        });
+      timeEl.innerText = rangeString;
+      detailsContainer.innerHTML = '';
 
-        alertBadge.style.display = 'block';
-        
-        if (currentSlot.pax < 15) {
-          container.style.background = 'rgba(40, 167, 69, 0.1)';
-          container.style.boxShadow = 'inset 0 0 30px rgba(40, 167, 69, 0.2)';
-          paxEl.style.color = '#28a745';
-          timeEl.style.color = '#28a745';
-          alertBadge.innerText = 'ESTABLE';
-          alertBadge.style.background = '#28a745';
-          alertBadge.style.animation = 'none';
-        } else if (currentSlot.pax >= 15 && currentSlot.pax <= 20) {
-          container.style.background = 'rgba(255, 202, 40, 0.15)';
-          container.style.boxShadow = 'inset 0 0 40px rgba(255, 202, 40, 0.3)';
-          paxEl.style.color = '#e6b800';
-          timeEl.style.color = '#e6b800';
-          alertBadge.innerText = 'PRECAUCIÓN';
-          alertBadge.style.background = '#e6b800';
-          alertBadge.style.color = '#000';
-          alertBadge.style.animation = 'none';
-        } else if (currentSlot.pax > 20 && currentSlot.pax <= 25) {
-          container.style.background = 'rgba(255, 136, 0, 0.15)';
-          container.style.boxShadow = 'inset 0 0 50px rgba(255, 136, 0, 0.3)';
-          paxEl.style.color = '#ff8800';
-          timeEl.style.color = '#ff8800';
-          alertBadge.innerText = 'PRECAUCIÓN ALTA';
-          alertBadge.style.background = '#ff8800';
-          alertBadge.style.color = '#fff';
-          alertBadge.style.animation = 'pulse 2s infinite';
-        } else {
-          container.style.background = 'rgba(211, 47, 47, 0.15)';
-          container.style.boxShadow = 'inset 0 0 60px rgba(211, 47, 47, 0.3)';
-          paxEl.style.color = '#d32f2f';
-          timeEl.style.color = '#d32f2f';
-          alertBadge.innerText = 'ADVERTENCIA - ALTO VOLUMEN DE PASAJEROS';
-          alertBadge.style.background = '#d32f2f';
-          alertBadge.style.color = '#fff';
-          alertBadge.style.animation = 'pulse 1s infinite alternate';
-        }
+      // Consolidamos los vuelos que se cruzan con la ventana móvil de 2 horas.
+      // No usamos solo el slot actual, porque eso limitaría la vista a 30 minutos.
+      // También deduplicamos, porque el backend repite el mismo vuelo en cada bloque de 30 min donde está activo.
+      const flightMap = new Map();
+
+      (hourly.slots || []).forEach(slot => {
+        (slot.details || []).forEach(detOriginal => {
+          if (detOriginal.firstIndex === undefined || detOriginal.lastIndex === undefined) return;
+
+          const firstIndex = parseInt(detOriginal.firstIndex);
+          const lastIndex = parseInt(detOriginal.lastIndex);
+
+          const overlapsWindow = firstIndex < windowEndExclusive && lastIndex >= windowStartIndex;
+          if (!overlapsWindow) return;
+
+          const key = [
+            detOriginal.vuelo || '',
+            detOriginal.hora || '',
+            detOriginal.tipo || '',
+            firstIndex,
+            lastIndex,
+            detOriginal.paxInBlock || 0
+          ].join('|');
+
+          if (!flightMap.has(key)) {
+            const det = { ...detOriginal };
+            det.firstIndex = firstIndex;
+            det.lastIndex = lastIndex;
+            det.paxInBlock = parseInt(det.paxInBlock) || 0;
+
+            if (current10MinIndex >= det.firstIndex && current10MinIndex <= det.lastIndex) {
+              det.estado = 'EN SERVICIO';
+              det.order = 1;
+              det.bg = 'rgba(0, 153, 255, 0.2)';
+              det.color = '#006699';
+              det.borderColor = 'rgba(0, 153, 255, 0.5)';
+            } else if (det.firstIndex > current10MinIndex) {
+              det.estado = 'PRÓXIMO';
+              det.order = 2;
+              det.bg = 'rgba(102, 102, 102, 0.1)';
+              det.color = 'var(--text-dim)';
+              det.borderColor = 'rgba(102, 102, 102, 0.3)';
+            } else {
+              det.estado = 'FINALIZADO';
+              det.order = 3;
+              det.bg = 'rgba(40, 167, 69, 0.15)';
+              det.color = '#28a745';
+              det.borderColor = 'rgba(40, 167, 69, 0.5)';
+            }
+
+            det.startTime = slotIndexToStartTime(det.firstIndex);
+            det.endTime = slotIndexToEndTime(det.lastIndex);
+
+            flightMap.set(key, det);
+          }
+        });
+      });
+
+      const windowDetails = Array.from(flightMap.values());
+      windowDetails.sort((a, b) => {
+        if (a.order !== b.order) return a.order - b.order;
+        return a.firstIndex - b.firstIndex;
+      });
+
+      const paxWindow = windowDetails.reduce((sum, det) => sum + (parseInt(det.paxInBlock) || 0), 0);
+      paxEl.innerText = paxWindow;
+
+      windowDetails.forEach(det => {
+        const detDiv = document.createElement('div');
+        detDiv.style.background = det.bg;
+        detDiv.style.padding = '8px 18px';
+        detDiv.style.borderRadius = '20px';
+        detDiv.style.fontSize = '14px';
+        detDiv.style.fontWeight = 'bold';
+        detDiv.style.color = det.color;
+        detDiv.style.border = `1px solid ${det.borderColor}`;
+        detDiv.style.display = 'flex';
+        detDiv.style.alignItems = 'center';
+        detDiv.style.gap = '8px';
+
+        const tipoStr = det.tipo ? ` <span style="opacity:0.7; font-size:12px;">| ${det.tipo}</span>` : '';
+        detDiv.innerHTML =
+          `<span style="font-size:16px;font-weight:800">${det.vuelo}</span>` +
+          ` <span style="opacity:0.8; font-size:12px;">(${det.paxInBlock} PAX)</span>` +
+          ` &bull; <span style="opacity:0.9; font-size:12px;">Prog: ${det.hora} | Servicio: ${det.startTime} - ${det.endTime}</span>` +
+          ` &bull; <span>${det.estado}</span>${tipoStr}`;
+
+        detailsContainer.appendChild(detDiv);
+      });
+
+      alertBadge.style.display = 'block';
+
+      // Umbrales ajustados para ventana de 2 horas.
+      // Antes eran 15/20/25 para 30 minutos; ahora se escalan x4.
+      if (paxWindow < 60) {
+        container.style.background = 'rgba(40, 167, 69, 0.1)';
+        container.style.boxShadow = 'inset 0 0 30px rgba(40, 167, 69, 0.2)';
+        paxEl.style.color = '#28a745';
+        timeEl.style.color = '#28a745';
+        alertBadge.innerText = 'ESTABLE';
+        alertBadge.style.background = '#28a745';
+        alertBadge.style.color = '#fff';
+        alertBadge.style.animation = 'none';
+      } else if (paxWindow >= 60 && paxWindow <= 80) {
+        container.style.background = 'rgba(255, 202, 40, 0.15)';
+        container.style.boxShadow = 'inset 0 0 40px rgba(255, 202, 40, 0.3)';
+        paxEl.style.color = '#e6b800';
+        timeEl.style.color = '#e6b800';
+        alertBadge.innerText = 'PRECAUCIÓN';
+        alertBadge.style.background = '#e6b800';
+        alertBadge.style.color = '#000';
+        alertBadge.style.animation = 'none';
+      } else if (paxWindow > 80 && paxWindow <= 100) {
+        container.style.background = 'rgba(255, 136, 0, 0.15)';
+        container.style.boxShadow = 'inset 0 0 50px rgba(255, 136, 0, 0.3)';
+        paxEl.style.color = '#ff8800';
+        timeEl.style.color = '#ff8800';
+        alertBadge.innerText = 'PRECAUCIÓN ALTA';
+        alertBadge.style.background = '#ff8800';
+        alertBadge.style.color = '#fff';
+        alertBadge.style.animation = 'pulse 2s infinite';
       } else {
-        timeEl.innerText = rangeString;
+        container.style.background = 'rgba(211, 47, 47, 0.15)';
+        container.style.boxShadow = 'inset 0 0 60px rgba(211, 47, 47, 0.3)';
+        paxEl.style.color = '#d32f2f';
+        timeEl.style.color = '#d32f2f';
+        alertBadge.innerText = 'ADVERTENCIA - ALTO VOLUMEN DE PASAJEROS';
+        alertBadge.style.background = '#d32f2f';
+        alertBadge.style.color = '#fff';
+        alertBadge.style.animation = 'pulse 1s infinite alternate';
+      }
+
+      if (windowDetails.length === 0) {
         paxEl.innerText = '0';
         container.style.background = 'transparent';
-        alertBadge.style.display = 'none';
+        container.style.boxShadow = 'none';
+        paxEl.style.color = '#28a745';
+        timeEl.style.color = 'var(--accent-primary)';
+        alertBadge.innerText = 'SIN SERVICIOS EN LAS PRÓXIMAS 2 HORAS';
+        alertBadge.style.background = '#28a745';
+        alertBadge.style.color = '#fff';
+        alertBadge.style.animation = 'none';
       }
     }
 
-    function getMockData() {
-      return {
-        pmrDetailed: {
-          hourly: {
-            date: "11/03/2026",
-            totalFlights: 154,
-            slots: [
-              { time: "11:00", pax: 15, details: ["Vuelo 101 - 5 PAX", "Vuelo 102 - 10 PAX"] },
-              { time: "11:30", pax: 8, details: ["Vuelo 204 - 8 PAX"] },
-              { time: "12:00", pax: 32, details: ["Vuelo 301 - 12 PAX", "Vuelo 305 - 20 PAX"] },
-              { time: "12:30", pax: 28, details: ["Vuelo 455 - 28 PAX"] }
-            ]
-          }
-        }
-      };
-    }
-
+    // Call fetchData initially and then every minute
     fetchData();
     setInterval(fetchData, REFRESH_TIME);
+
+    // Additionally, call renderPmrHourly every 10 seconds to ensure the UI perfectly syncs 
+    // when clicking over exactly the 10-minute/30-minute boundary, just using cached data.
+    setInterval(() => {
+        if (data) renderPmrHourly();
+    }, 10000);
 
   </script>
 </body>
