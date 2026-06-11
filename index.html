@@ -394,36 +394,38 @@
       if (!data || !data.pmrDetailed || !data.pmrDetailed.hourly) return;
 
       const hourly = data.pmrDetailed.hourly;
-      document.getElementById('pmr-hourly-datetime').innerText =
-        `Fecha: ${hourly.date || '--'} | Total Vuelos: ${hourly.totalFlights || '--'}`;
+      const flights = Array.isArray(hourly.flights) ? hourly.flights : buildFlightsFromLegacySlots(hourly.slots || []);
 
       const now = new Date();
-      const currentHours = now.getHours();
-      const realMinutes = now.getMinutes();
+      const current10MinIndex = (now.getHours() * 6) + Math.floor(now.getMinutes() / 10);
 
-      // La matriz del backend viene en bloques de 10 minutos.
-      // Por eso "desde ahora" se redondea al bloque de 10 minutos vigente.
-      // Ejemplo: 12:47 se evalúa como 12:40 - 14:39.
-      const current10MinIndex = (currentHours * 6) + Math.floor(realMinutes / 10);
+      // Desde el bloque actual de 10 minutos hasta las próximas 2 horas.
+      // 2 horas = 12 bloques de 10 minutos.
       const windowStartIndex = current10MinIndex;
-      const windowEndExclusive = Math.min(windowStartIndex + 12, 144); // 12 bloques de 10 min = 2 horas
+      const windowEndIndexExclusive = Math.min(144, windowStartIndex + 12);
 
-      function slotIndexToStartTime(index) {
-        const capped = Math.max(0, Math.min(index, 143));
-        const h = Math.floor(capped / 6).toString().padStart(2, '0');
-        const m = ((capped % 6) * 10).toString().padStart(2, '0');
-        return `${h}:${m}`;
-      }
+      const rangeString = `${indexToTime(windowStartIndex)} - ${indexToTime(windowEndIndexExclusive)}`;
 
-      function slotIndexToEndTime(index) {
-        if (index >= 143) return '23:59';
-        const totalMinutes = (Math.max(0, index) * 10) + 9;
-        const h = Math.floor(totalMinutes / 60).toString().padStart(2, '0');
-        const m = (totalMinutes % 60).toString().padStart(2, '0');
-        return `${h}:${m}`;
-      }
+      // Regla crítica:
+      // Cada vuelo se cuenta una sola vez si su ventana de atención intersecta la ventana móvil.
+      // No se suma el valor repetido de cada bloque de 10 minutos.
+      const windowFlights = flights
+        .filter(f => {
+          const first = Number(f.firstIndex);
+          const lastExclusive = Number(f.lastIndex) + 1;
+          return first < windowEndIndexExclusive && lastExclusive > windowStartIndex;
+        })
+        .sort((a, b) => {
+          const estadoA = getFlightStatusOrder(a, current10MinIndex);
+          const estadoB = getFlightStatusOrder(b, current10MinIndex);
+          if (estadoA !== estadoB) return estadoA - estadoB;
+          return Number(a.firstIndex) - Number(b.firstIndex);
+        });
 
-      const rangeString = `${slotIndexToStartTime(windowStartIndex)} - ${slotIndexToEndTime(windowEndExclusive - 1)}`;
+      const totalPaxWindow = windowFlights.reduce((acc, f) => acc + (Number(f.pax || f.paxInBlock) || 0), 0);
+
+      document.getElementById('pmr-hourly-datetime').innerText =
+        `Fecha: ${hourly.date || '--'} | Total Vuelos Día: ${hourly.totalFlights || '--'} | Vuelos próximas 2H: ${windowFlights.length}`;
 
       const container = document.getElementById('pmr-hourly-container');
       const timeEl = document.getElementById('pmr-hourly-time');
@@ -432,103 +434,49 @@
       const detailsContainer = document.getElementById('pmr-hourly-details');
 
       timeEl.innerText = rangeString;
+      paxEl.innerText = totalPaxWindow;
       detailsContainer.innerHTML = '';
 
-      // Consolidamos los vuelos que se cruzan con la ventana móvil de 2 horas.
-      // No usamos solo el slot actual, porque eso limitaría la vista a 30 minutos.
-      // También deduplicamos, porque el backend repite el mismo vuelo en cada bloque de 30 min donde está activo.
-      const flightMap = new Map();
+      windowFlights.forEach(f => {
+        const pax = Number(f.pax || f.paxInBlock) || 0;
+        const estado = getFlightStatus(f, current10MinIndex);
+        const style = getStatusStyle(estado);
 
-      (hourly.slots || []).forEach(slot => {
-        (slot.details || []).forEach(detOriginal => {
-          if (detOriginal.firstIndex === undefined || detOriginal.lastIndex === undefined) return;
+        const startTime = f.startTime || indexToTime(Number(f.firstIndex));
+        const endTime = f.endTime || indexToTime(Math.min(Number(f.lastIndex) + 1, 144));
 
-          const firstIndex = parseInt(detOriginal.firstIndex);
-          const lastIndex = parseInt(detOriginal.lastIndex);
-
-          const overlapsWindow = firstIndex < windowEndExclusive && lastIndex >= windowStartIndex;
-          if (!overlapsWindow) return;
-
-          const key = [
-            detOriginal.vuelo || '',
-            detOriginal.hora || '',
-            detOriginal.tipo || '',
-            firstIndex,
-            lastIndex,
-            detOriginal.paxInBlock || 0
-          ].join('|');
-
-          if (!flightMap.has(key)) {
-            const det = { ...detOriginal };
-            det.firstIndex = firstIndex;
-            det.lastIndex = lastIndex;
-            det.paxInBlock = parseInt(det.paxInBlock) || 0;
-
-            if (current10MinIndex >= det.firstIndex && current10MinIndex <= det.lastIndex) {
-              det.estado = 'EN SERVICIO';
-              det.order = 1;
-              det.bg = 'rgba(0, 153, 255, 0.2)';
-              det.color = '#006699';
-              det.borderColor = 'rgba(0, 153, 255, 0.5)';
-            } else if (det.firstIndex > current10MinIndex) {
-              det.estado = 'PRÓXIMO';
-              det.order = 2;
-              det.bg = 'rgba(102, 102, 102, 0.1)';
-              det.color = 'var(--text-dim)';
-              det.borderColor = 'rgba(102, 102, 102, 0.3)';
-            } else {
-              det.estado = 'FINALIZADO';
-              det.order = 3;
-              det.bg = 'rgba(40, 167, 69, 0.15)';
-              det.color = '#28a745';
-              det.borderColor = 'rgba(40, 167, 69, 0.5)';
-            }
-
-            det.startTime = slotIndexToStartTime(det.firstIndex);
-            det.endTime = slotIndexToEndTime(det.lastIndex);
-
-            flightMap.set(key, det);
-          }
-        });
-      });
-
-      const windowDetails = Array.from(flightMap.values());
-      windowDetails.sort((a, b) => {
-        if (a.order !== b.order) return a.order - b.order;
-        return a.firstIndex - b.firstIndex;
-      });
-
-      const paxWindow = windowDetails.reduce((sum, det) => sum + (parseInt(det.paxInBlock) || 0), 0);
-      paxEl.innerText = paxWindow;
-
-      windowDetails.forEach(det => {
         const detDiv = document.createElement('div');
-        detDiv.style.background = det.bg;
+        detDiv.style.background = style.bg;
         detDiv.style.padding = '8px 18px';
         detDiv.style.borderRadius = '20px';
         detDiv.style.fontSize = '14px';
         detDiv.style.fontWeight = 'bold';
-        detDiv.style.color = det.color;
-        detDiv.style.border = `1px solid ${det.borderColor}`;
+        detDiv.style.color = style.color;
+        detDiv.style.border = `1px solid ${style.borderColor}`;
         detDiv.style.display = 'flex';
         detDiv.style.alignItems = 'center';
         detDiv.style.gap = '8px';
+        detDiv.style.flexWrap = 'wrap';
 
-        const tipoStr = det.tipo ? ` <span style="opacity:0.7; font-size:12px;">| ${det.tipo}</span>` : '';
+        const aerolineaStr = f.aerolinea ? ` <span style="opacity:0.7; font-size:12px;">| ${escapeHtml(f.aerolinea)}</span>` : '';
+        const terminalStr = f.terminal ? ` <span style="opacity:0.7; font-size:12px;">| ${escapeHtml(f.terminal)}</span>` : '';
+        const tipoStr = f.tipo ? ` <span style="opacity:0.7; font-size:12px;">| ${escapeHtml(f.tipo)}</span>` : '';
+
         detDiv.innerHTML =
-          `<span style="font-size:16px;font-weight:800">${det.vuelo}</span>` +
-          ` <span style="opacity:0.8; font-size:12px;">(${det.paxInBlock} PAX)</span>` +
-          ` &bull; <span style="opacity:0.9; font-size:12px;">Prog: ${det.hora} | Servicio: ${det.startTime} - ${det.endTime}</span>` +
-          ` &bull; <span>${det.estado}</span>${tipoStr}`;
+          `<span style="font-size:16px;font-weight:800">${escapeHtml(f.vuelo || '--')}</span>` +
+          ` <span style="opacity:0.8; font-size:12px;">(${pax} PAX)</span>` +
+          ` &bull; <span style="opacity:0.9; font-size:12px;">Prog: ${escapeHtml(f.hora || '--:--')} | Servicio: ${startTime} - ${endTime}</span>` +
+          ` &bull; <span>${estado}</span>` +
+          aerolineaStr + terminalStr + tipoStr;
 
         detailsContainer.appendChild(detDiv);
       });
 
       alertBadge.style.display = 'block';
 
-      // Umbrales ajustados para ventana de 2 horas.
-      // Antes eran 15/20/25 para 30 minutos; ahora se escalan x4.
-      if (paxWindow < 60) {
+      // Umbrales ajustados para una ventana de 2 horas.
+      // Si la operación define otra criticidad, cambia solo estos cortes.
+      if (totalPaxWindow < 60) {
         container.style.background = 'rgba(40, 167, 69, 0.1)';
         container.style.boxShadow = 'inset 0 0 30px rgba(40, 167, 69, 0.2)';
         paxEl.style.color = '#28a745';
@@ -537,7 +485,7 @@
         alertBadge.style.background = '#28a745';
         alertBadge.style.color = '#fff';
         alertBadge.style.animation = 'none';
-      } else if (paxWindow >= 60 && paxWindow <= 80) {
+      } else if (totalPaxWindow >= 60 && totalPaxWindow <= 80) {
         container.style.background = 'rgba(255, 202, 40, 0.15)';
         container.style.boxShadow = 'inset 0 0 40px rgba(255, 202, 40, 0.3)';
         paxEl.style.color = '#e6b800';
@@ -546,7 +494,7 @@
         alertBadge.style.background = '#e6b800';
         alertBadge.style.color = '#000';
         alertBadge.style.animation = 'none';
-      } else if (paxWindow > 80 && paxWindow <= 100) {
+      } else if (totalPaxWindow > 80 && totalPaxWindow <= 100) {
         container.style.background = 'rgba(255, 136, 0, 0.15)';
         container.style.boxShadow = 'inset 0 0 50px rgba(255, 136, 0, 0.3)';
         paxEl.style.color = '#ff8800';
@@ -566,17 +514,90 @@
         alertBadge.style.animation = 'pulse 1s infinite alternate';
       }
 
-      if (windowDetails.length === 0) {
-        paxEl.innerText = '0';
-        container.style.background = 'transparent';
-        container.style.boxShadow = 'none';
-        paxEl.style.color = '#28a745';
-        timeEl.style.color = 'var(--accent-primary)';
-        alertBadge.innerText = 'SIN SERVICIOS EN LAS PRÓXIMAS 2 HORAS';
-        alertBadge.style.background = '#28a745';
-        alertBadge.style.color = '#fff';
-        alertBadge.style.animation = 'none';
+      if (windowFlights.length === 0) {
+        detailsContainer.innerHTML = '<div style="font-size:16px; color: var(--text-dim); font-weight:800;">Sin vuelos PMR en la ventana móvil actual</div>';
       }
+    }
+
+    function getFlightStatus(f, current10MinIndex) {
+      const first = Number(f.firstIndex);
+      const last = Number(f.lastIndex);
+
+      if (current10MinIndex < first) return 'PENDIENTE';
+      if (current10MinIndex > last) return 'FINALIZADO';
+      return 'EN SERVICIO';
+    }
+
+    function getFlightStatusOrder(f, current10MinIndex) {
+      const estado = getFlightStatus(f, current10MinIndex);
+      if (estado === 'EN SERVICIO') return 1;
+      if (estado === 'PENDIENTE') return 2;
+      return 3;
+    }
+
+    function getStatusStyle(estado) {
+      if (estado === 'PENDIENTE') {
+        return {
+          bg: 'rgba(102, 102, 102, 0.1)',
+          color: 'var(--text-dim)',
+          borderColor: 'rgba(102, 102, 102, 0.3)'
+        };
+      }
+
+      if (estado === 'FINALIZADO') {
+        return {
+          bg: 'rgba(40, 167, 69, 0.15)',
+          color: '#28a745',
+          borderColor: 'rgba(40, 167, 69, 0.5)'
+        };
+      }
+
+      return {
+        bg: 'rgba(0, 153, 255, 0.2)',
+        color: '#006699',
+        borderColor: 'rgba(0, 153, 255, 0.5)'
+      };
+    }
+
+    function indexToTime(index) {
+      const safeIndex = Math.max(0, Math.min(144, Number(index) || 0));
+
+      if (safeIndex >= 144) return '24:00';
+
+      const totalMinutes = safeIndex * 10;
+      const hh = Math.floor(totalMinutes / 60);
+      const mm = totalMinutes % 60;
+
+      return `${hh.toString().padStart(2, '0')}:${mm.toString().padStart(2, '0')}`;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function buildFlightsFromLegacySlots(slots) {
+      // Fallback por si el Apps Script antiguo todavía no entrega hourly.flights.
+      // Deduplica por vuelo + inicio + término.
+      const map = new Map();
+
+      slots.forEach(slot => {
+        (slot.details || []).forEach(f => {
+          const key = `${f.vuelo}|${f.firstIndex}|${f.lastIndex}`;
+          if (!map.has(key)) {
+            map.set(key, {
+              ...f,
+              pax: Number(f.pax || f.paxInBlock) || 0
+            });
+          }
+        });
+      });
+
+      return Array.from(map.values());
     }
 
     // Call fetchData initially and then every minute
