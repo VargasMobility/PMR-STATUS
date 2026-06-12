@@ -255,6 +255,122 @@
       from { opacity: 0.5; transform: scale(0.8); }
       to { opacity: 1; transform: scale(1.2); }
     }
+
+    /* PMR flight cards: urgency by programmed flight time */
+    .flight-pill {
+      padding: 10px 18px;
+      border-radius: 18px;
+      font-size: 14px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      border: 1px solid rgba(0, 51, 102, 0.12);
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.06);
+      transition: transform 0.25s ease, box-shadow 0.25s ease, filter 0.25s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .flight-pill:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.11);
+    }
+
+    .flight-main {
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: 0.2px;
+    }
+
+    .flight-muted {
+      opacity: 0.78;
+      font-size: 12px;
+    }
+
+    .flight-status-chip {
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      background: rgba(255, 255, 255, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.5);
+    }
+
+    .flight-urgency-red {
+      background: rgba(211, 47, 47, 0.18);
+      color: #8f1111;
+      border-color: rgba(211, 47, 47, 0.65);
+    }
+
+    .flight-urgency-orange {
+      background: rgba(255, 136, 0, 0.20);
+      color: #9a4f00;
+      border-color: rgba(255, 136, 0, 0.70);
+    }
+
+    .flight-urgency-blue {
+      background: rgba(0, 153, 255, 0.18);
+      color: #005f99;
+      border-color: rgba(0, 153, 255, 0.60);
+    }
+
+    .flight-urgency-neutral {
+      background: rgba(102, 102, 102, 0.10);
+      color: var(--text-dim);
+      border-color: rgba(102, 102, 102, 0.30);
+    }
+
+    .flight-finalized {
+      background: rgba(40, 167, 69, 0.12);
+      color: #1f7a35;
+      border-color: rgba(40, 167, 69, 0.45);
+      opacity: 0.85;
+    }
+
+    .flight-in-service {
+      animation: inServiceGlow 5s ease-in-out infinite;
+      border-width: 2px;
+    }
+
+    .flight-in-service::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(110deg, transparent 0%, rgba(255, 255, 255, 0.55) 42%, transparent 72%);
+      transform: translateX(-120%);
+      animation: serviceSweep 5s ease-in-out infinite;
+      pointer-events: none;
+    }
+
+    .flight-in-service > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    @keyframes inServiceGlow {
+      0%, 100% {
+        box-shadow: 0 0 0 rgba(0, 51, 102, 0.0), 0 3px 8px rgba(0, 0, 0, 0.06);
+        filter: brightness(1);
+      }
+      50% {
+        box-shadow: 0 0 22px rgba(0, 51, 102, 0.28), 0 8px 18px rgba(0, 0, 0, 0.12);
+        filter: brightness(1.04);
+      }
+    }
+
+    @keyframes serviceSweep {
+      0%, 38% {
+        transform: translateX(-120%);
+      }
+      65%, 100% {
+        transform: translateX(120%);
+      }
+    }
+
   </style>
 </head>
 
@@ -399,6 +515,7 @@
       const flights = Array.isArray(hourly.flights) ? hourly.flights : buildFlightsFromLegacySlots(hourly.slots || []);
 
       const now = new Date();
+      const currentMinuteOfDay = getMinuteOfDay(now);
       const current10MinIndex = (now.getHours() * 6) + Math.floor(now.getMinutes() / 10);
 
       // Desde el bloque actual de 10 minutos hasta las próximas 2 horas.
@@ -421,6 +538,11 @@
           const estadoA = getFlightStatusOrder(a, current10MinIndex);
           const estadoB = getFlightStatusOrder(b, current10MinIndex);
           if (estadoA !== estadoB) return estadoA - estadoB;
+
+          const urgA = getFlightUrgencyRank(a, currentMinuteOfDay);
+          const urgB = getFlightUrgencyRank(b, currentMinuteOfDay);
+          if (urgA !== urgB) return urgA - urgB;
+
           return Number(a.firstIndex) - Number(b.firstIndex);
         });
 
@@ -441,34 +563,29 @@
 
       windowFlights.forEach(f => {
         const pax = Number(f.pax || f.paxInBlock) || 0;
-        const estado = getFlightStatus(f, current10MinIndex);
-        const style = getStatusStyle(estado);
+        const estadoServicio = getFlightStatus(f, current10MinIndex);
+        const urgency = getFlightUrgency(f, currentMinuteOfDay, estadoServicio);
 
         const startTime = f.startTime || indexToTime(Number(f.firstIndex));
         const endTime = f.endTime || indexToTime(Math.min(Number(f.lastIndex) + 1, 144));
 
         const detDiv = document.createElement('div');
-        detDiv.style.background = style.bg;
-        detDiv.style.padding = '8px 18px';
-        detDiv.style.borderRadius = '20px';
-        detDiv.style.fontSize = '14px';
-        detDiv.style.fontWeight = 'bold';
-        detDiv.style.color = style.color;
-        detDiv.style.border = `1px solid ${style.borderColor}`;
-        detDiv.style.display = 'flex';
-        detDiv.style.alignItems = 'center';
-        detDiv.style.gap = '8px';
-        detDiv.style.flexWrap = 'wrap';
+        const serviceClass = estadoServicio === 'EN SERVICIO' ? 'flight-in-service' : '';
+        detDiv.className = `flight-pill ${urgency.className} ${serviceClass}`;
 
-        const aerolineaStr = f.aerolinea ? ` <span style="opacity:0.7; font-size:12px;">| ${escapeHtml(f.aerolinea)}</span>` : '';
-        const terminalStr = f.terminal ? ` <span style="opacity:0.7; font-size:12px;">| ${escapeHtml(f.terminal)}</span>` : '';
-        const tipoStr = f.tipo ? ` <span style="opacity:0.7; font-size:12px;">| ${escapeHtml(f.tipo)}</span>` : '';
+        const aerolineaStr = f.aerolinea ? ` <span class="flight-muted">| ${escapeHtml(f.aerolinea)}</span>` : '';
+        const terminalStr = f.terminal ? ` <span class="flight-muted">| ${escapeHtml(f.terminal)}</span>` : '';
+        const tipoStr = f.tipo ? ` <span class="flight-muted">| ${escapeHtml(f.tipo)}</span>` : '';
+
+        detDiv.title = `${f.vuelo || '--'} | Vuelo programado: ${f.horaProgramada || f.hora || '--:--'} | Servicio: ${startTime} - ${endTime}`;
 
         detDiv.innerHTML =
-          `<span style="font-size:16px;font-weight:800">${escapeHtml(f.vuelo || '--')}</span>` +
-          ` <span style="opacity:0.8; font-size:12px;">(${pax} PAX)</span>` +
-          ` &bull; <span style="opacity:0.9; font-size:12px;">Prog: ${escapeHtml(f.horaProgramada || f.hora || '--:--')} | Servicio: ${startTime} - ${endTime}</span>` +
-          ` &bull; <span>${estado}</span>` +
+          `<span class="flight-main">${escapeHtml(f.vuelo || '--')}</span>` +
+          ` <span class="flight-muted">(${pax} PAX)</span>` +
+          ` &bull; <span class="flight-muted">Prog: ${escapeHtml(f.horaProgramada || f.hora || '--:--')}</span>` +
+          ` &bull; <span class="flight-muted">Servicio: ${startTime} - ${endTime}</span>` +
+          ` &bull; <span class="flight-status-chip">${escapeHtml(urgency.label)}</span>` +
+          ` &bull; <span class="flight-status-chip">${escapeHtml(estadoServicio)}</span>` +
           aerolineaStr + terminalStr + tipoStr;
 
         detailsContainer.appendChild(detDiv);
@@ -535,6 +652,105 @@
       if (estado === 'EN SERVICIO') return 1;
       if (estado === 'PENDIENTE') return 2;
       return 3;
+    }
+
+
+    function getMinuteOfDay(date) {
+      return (date.getHours() * 60) + date.getMinutes();
+    }
+
+    function parseTimeToMinutes(value) {
+      const txt = String(value || "").trim();
+      const match = txt.match(/(\d{1,2})[:.](\d{2})/);
+      if (!match) return null;
+
+      const hh = Number(match[1]);
+      const mm = Number(match[2]);
+
+      if (Number.isNaN(hh) || Number.isNaN(mm) || hh < 0 || hh > 24 || mm < 0 || mm > 59) {
+        return null;
+      }
+
+      return Math.min((hh * 60) + mm, 1440);
+    }
+
+    function getMinutesToProgrammedFlight(f, currentMinuteOfDay) {
+      const flightMinute = parseTimeToMinutes(f.horaProgramada || f.hora);
+      if (flightMinute === null) return null;
+
+      return flightMinute - currentMinuteOfDay;
+    }
+
+    function getFlightUrgencyRank(f, currentMinuteOfDay) {
+      const minutesToFlight = getMinutesToProgrammedFlight(f, currentMinuteOfDay);
+
+      if (minutesToFlight === null) return 5;
+      if (minutesToFlight < 0) return 1;
+      if (minutesToFlight <= 30) return 1;
+      if (minutesToFlight <= 60) return 2;
+      if (minutesToFlight <= 120) return 3;
+      return 4;
+    }
+
+    function getFlightUrgency(f, currentMinuteOfDay, estadoServicio) {
+      const minutesToFlight = getMinutesToProgrammedFlight(f, currentMinuteOfDay);
+
+      if (estadoServicio === 'FINALIZADO') {
+        return {
+          className: 'flight-finalized',
+          label: 'Finalizado'
+        };
+      }
+
+      if (minutesToFlight === null) {
+        return {
+          className: 'flight-urgency-neutral',
+          label: 'Sin hora'
+        };
+      }
+
+      if (minutesToFlight < 0) {
+        return {
+          className: 'flight-urgency-red',
+          label: `Vuelo vencido ${formatMinuteDelta(Math.abs(minutesToFlight))}`
+        };
+      }
+
+      if (minutesToFlight <= 30) {
+        return {
+          className: 'flight-urgency-red',
+          label: `≤ 30 min · ${formatMinuteDelta(minutesToFlight)}`
+        };
+      }
+
+      if (minutesToFlight <= 60) {
+        return {
+          className: 'flight-urgency-orange',
+          label: `30-60 min · ${formatMinuteDelta(minutesToFlight)}`
+        };
+      }
+
+      if (minutesToFlight <= 120) {
+        return {
+          className: 'flight-urgency-blue',
+          label: `1-2 h · ${formatMinuteDelta(minutesToFlight)}`
+        };
+      }
+
+      return {
+        className: 'flight-urgency-neutral',
+        label: `> 2 h · ${formatMinuteDelta(minutesToFlight)}`
+      };
+    }
+
+    function formatMinuteDelta(minutes) {
+      const safeMinutes = Math.max(0, Number(minutes) || 0);
+      const h = Math.floor(safeMinutes / 60);
+      const m = safeMinutes % 60;
+
+      if (h <= 0) return `${m} min`;
+      if (m === 0) return `${h} h`;
+      return `${h} h ${m} min`;
     }
 
     function getStatusStyle(estado) {
